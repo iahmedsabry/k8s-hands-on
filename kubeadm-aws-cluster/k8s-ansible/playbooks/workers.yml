@@ -1,0 +1,9 @@
+- hosts: workers
+  become: true
+
+  tasks:
+
+    - name: Join Kubernetes cluster
+      shell: "{{ hostvars[groups['control_plane'][0]].kube_join_cmd }} --ignore-preflight-errors=all"
+      args:
+        creates: /etc/kubernetes/kubelet.conf
