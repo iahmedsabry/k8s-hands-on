@@ -1,0 +1,72 @@
+- name: Install ArgoCD
+  hosts: control_plane
+  become: true
+
+  vars:
+    kubeconfig_path: /home/ubuntu/.kube/config
+
+  tasks:
+
+    - name: Install Helm
+      become: true
+      shell: |
+        curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      args:
+        creates: /usr/local/bin/helm
+
+    - name: Add ArgoCD Helm repo
+      become_user: ubuntu
+      command: helm repo add argo https://argoproj.github.io/argo-helm
+
+    - name: Update Helm repos
+      become_user: ubuntu
+      command: helm repo update
+
+    - name: Create argocd namespace
+      become_user: ubuntu
+      shell: >
+        kubectl create namespace argocd --dry-run=client -o yaml --kubeconfig={{ kubeconfig_path }}
+        | kubectl apply -f -
+
+    - name: Install/Upgrade ArgoCD via Helm
+      become_user: ubuntu
+      command: >
+        helm upgrade --install argocd argo/argo-cd
+        --namespace argocd
+
+    - name: Wait for ArgoCD Server deployment
+      become_user: ubuntu
+      command: >
+        kubectl rollout status deployment/argocd-server 
+        -n argocd --timeout=300s 
+        --kubeconfig={{ kubeconfig_path }}
+
+
+    - name: Copy ArgoCD service
+      copy:
+        src: ../../k8s-manifests/argocd/service.yaml
+        dest: /home/ubuntu/argocd-service.yaml
+
+    - name: Apply ArgoCD service
+      become_user: ubuntu
+      command: >
+        kubectl apply -f /home/ubuntu/argocd-service.yaml
+        --kubeconfig={{ kubeconfig_path }}
+
+    - name: Get ArgoCD admin password
+      become_user: ubuntu
+      command: >
+        kubectl -n argocd get secret argocd-initial-admin-secret
+        -o jsonpath="{.data.password}"
+        --kubeconfig={{ kubeconfig_path }}
+      register: argocd_password
+
+    - name: Decode password
+      set_fact:
+        argocd_admin_password: "{{ argocd_password.stdout | b64decode }}"
+
+    - debug:
+        msg: "ArgoCD Admin Password: {{ argocd_admin_password }}"
+
+    
+
