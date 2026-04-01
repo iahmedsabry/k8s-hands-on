@@ -1,0 +1,31 @@
+- name: Bootstrap ArgoCD
+  hosts: control_plane
+  become: true
+
+  vars:
+    kubeconfig_path: /home/ubuntu/.kube/config
+
+  tasks:
+
+    - name: Install pip
+      apt:
+        name: python3-pip
+        state: present
+        update_cache: yes
+
+    - name: Install Kubernetes Python client
+      pip:
+        name: kubernetes
+        executable: pip3
+
+    - name: Clone GitOps repo
+      git:
+        repo: https://github.com/iahmedsabry/k8s-gitops.git
+        dest: /tmp/k8s-gitops
+        version: HEAD
+
+    - name: Apply root app
+      kubernetes.core.k8s:
+        state: present
+        src: /tmp/k8s-gitops/bootstrap/root-app.yaml
+        kubeconfig: "{{ kubeconfig_path }}"

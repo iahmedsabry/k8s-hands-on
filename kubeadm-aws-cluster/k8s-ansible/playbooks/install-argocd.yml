@@ -41,18 +41,6 @@
         -n argocd --timeout=300s 
         --kubeconfig={{ kubeconfig_path }}
 
-
-    - name: Copy ArgoCD service
-      copy:
-        src: ../../k8s-manifests/argocd/service.yaml
-        dest: /home/ubuntu/argocd-service.yaml
-
-    - name: Apply ArgoCD service
-      become_user: ubuntu
-      command: >
-        kubectl apply -f /home/ubuntu/argocd-service.yaml
-        --kubeconfig={{ kubeconfig_path }}
-
     - name: Get ArgoCD admin password
       become_user: ubuntu
       command: >
@@ -66,7 +54,7 @@
         argocd_admin_password: "{{ argocd_password.stdout | b64decode }}"
 
     - debug:
-        msg: "ArgoCD Admin Password: {{ argocd_admin_password }}"
+        msg: "ArgoCD Admin Password (for initial login only): {{ argocd_admin_password }}"
 
     
 
