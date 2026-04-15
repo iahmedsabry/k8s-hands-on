@@ -100,5 +100,17 @@
     - name: Hold Kubernetes packages
       shell: apt-mark hold kubelet kubeadm kubectl
 
+    - name: Configure Kubelet for AWS Cloud Provider
+      lineinfile:
+        path: /etc/default/kubelet
+        line: 'KUBELET_EXTRA_ARGS="--cloud-provider=aws"'
+        create: yes
+      register: kubelet_config
+
+    - name: Restart Kubelet to apply Cloud Provider
+      service:
+        name: kubelet
+        state: restarted
+      when: kubelet_config.changed
 
 

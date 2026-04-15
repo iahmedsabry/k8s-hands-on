@@ -3,6 +3,17 @@
 
   tasks:
 
+    - name: Configure Kubelet for AWS
+      lineinfile:
+        path: /etc/default/kubelet
+        line: 'KUBELET_EXTRA_ARGS="--cloud-provider=aws"'
+        create: yes
+
+    - name: Restart Kubelet for AWS config
+      service:
+        name: kubelet
+        state: restarted
+        
     - name: Join Kubernetes cluster
       shell: "{{ hostvars[groups['control_plane'][0]].kube_join_cmd }} --ignore-preflight-errors=all"
       args:

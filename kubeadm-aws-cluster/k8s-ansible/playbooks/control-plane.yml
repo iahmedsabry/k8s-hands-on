@@ -3,8 +3,24 @@
 
   tasks:
 
-    - name: Initialize cluster
-      shell: kubeadm init --pod-network-cidr=10.244.0.0/16
+    - name: Create kubeadm init configuration file
+      copy:
+        dest: /tmp/kubeadm-config.yaml
+        content: |
+          apiVersion: kubeadm.k8s.io/v1beta3
+          kind: ClusterConfiguration
+          clusterName: k8s-cluster
+          networking:
+            podSubnet: 10.244.0.0/16
+          ---
+          apiVersion: kubeadm.k8s.io/v1beta3
+          kind: InitConfiguration
+          nodeRegistration:
+            kubeletExtraArgs:
+              cloud-provider: "aws"
+
+    - name: Initialize cluster with config file
+      shell: kubeadm init --config /tmp/kubeadm-config.yaml
       register: kubeadm_output
       args:
         creates: /etc/kubernetes/admin.conf
