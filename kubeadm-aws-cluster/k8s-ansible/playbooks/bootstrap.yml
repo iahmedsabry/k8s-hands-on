@@ -1,13 +1,15 @@
-- name: Bootstrap ArgoCD
-  hosts: control_plane
+- name: Bootstrap GitOps
+  hosts: master
   become: true
 
   vars:
     kubeconfig_path: /home/ubuntu/.kube/config
+    argocd_namespace: argocd
+    root_app_url: https://raw.githubusercontent.com/iahmedsabry/k8s-gitops/main/bootstrap/root-app.yaml
 
   tasks:
 
-    - name: Install pip
+    - name: Ensure pip is installed
       apt:
         name: python3-pip
         state: present
@@ -15,17 +17,60 @@
 
     - name: Install Kubernetes Python client
       pip:
-        name: kubernetes
+        name: kubernetes==29.0.0
         executable: pip3
 
-    - name: Clone GitOps repo
-      git:
-        repo: https://github.com/iahmedsabry/k8s-gitops.git
-        dest: /tmp/k8s-gitops
-        version: HEAD
+    - name: Install Helm (latest v3)
+      shell: |
+        curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      args:
+        creates: /usr/local/bin/helm
+
+    - name: Add Argo Helm repo
+      become_user: ubuntu
+      command: helm repo add argo https://argoproj.github.io/argo-helm
+      register: helm_repo_add
+      failed_when: false
+      changed_when: "'has been added' in helm_repo_add.stdout"
+
+    - name: Update Helm repos
+      become_user: ubuntu
+      command: helm repo update
+
+    - name: Ensure argocd namespace exists
+      become_user: ubuntu
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        api_version: v1
+        kind: Namespace
+        name: argocd
+        state: present
+
+    - name: Copy bootstrap values.yaml to server
+      copy:
+        src: ../files/argocd/values.yaml
+        dest: /home/ubuntu/values.yaml
+
+    - name: Install or upgrade Argo CD
+      become_user: ubuntu
+      command: >
+        helm upgrade --install argocd argo/argo-cd
+        --version 5.51.6
+        -n {{ argocd_namespace }}
+        -f /home/ubuntu/values.yaml
+        --create-namespace
+        --wait
+
+    - name: Wait for Argo CD core components
+      become_user: ubuntu
+      shell: |
+        kubectl wait --for=condition=available deployment/argocd-server -n {{ argocd_namespace }} --timeout=300s
+        kubectl wait --for=condition=available deployment/argocd-repo-server -n {{ argocd_namespace }} --timeout=300s
+        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=argocd-application-controller -n {{ argocd_namespace }} --timeout=300s
+        
 
     - name: Apply root app
       kubernetes.core.k8s:
         state: present
-        src: /tmp/k8s-gitops/bootstrap/root-app.yaml
+        src: "{{ root_app_url }}"
         kubeconfig: "{{ kubeconfig_path }}"

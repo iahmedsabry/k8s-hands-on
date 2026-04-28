@@ -1,5 +1,5 @@
-output "control_plane_ip" {
-  value = aws_instance.control_plane.public_ip
+output "master_ip" {
+  value = aws_instance.master.public_ip
 }
 
 output "worker_ips" {
@@ -19,6 +19,11 @@ output "public_subnet_ids" {
   ]
 }
 
-output "hosted_zone_id" {
-  value = aws_route53_zone.private.zone_id
+output "alb_sg_id" {
+  description = "The ID of the security group to be used in Ingress annotations"
+  value       = aws_security_group.alb_sg.id
 }
+
+# output "hosted_zone_id" {
+#   value = aws_route53_zone.private.zone_id
+# }

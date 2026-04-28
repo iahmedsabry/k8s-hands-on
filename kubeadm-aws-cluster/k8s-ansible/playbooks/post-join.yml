@@ -1,0 +1,55 @@
+- name: "Automate K8s Node Patching for AWS ALB"
+  hosts: all
+  become: true
+
+  tasks:
+
+    - name: Get IMDSv2 Token
+      uri:
+        url: "http://169.254.169.254/latest/api/token"
+        method: PUT
+        headers:
+          "X-aws-ec2-metadata-token-ttl-seconds": "21600"
+        return_content: yes
+      register: imds_token
+      when: "'workers' in group_names"
+      failed_when: imds_token.status != 200
+
+    - name: Get Instance ID
+      uri:
+        url: "http://169.254.169.254/latest/meta-data/instance-id"
+        headers:
+          "X-aws-ec2-metadata-token": "{{ imds_token.content }}"
+        return_content: yes
+      register: instance_id
+      when: "'workers' in group_names"
+      failed_when: instance_id.status != 200
+
+    - name: Get Availability Zone
+      uri:
+        url: "http://169.254.169.254/latest/meta-data/placement/availability-zone"
+        headers:
+          "X-aws-ec2-metadata-token": "{{ imds_token.content }}"
+        return_content: yes
+      register: az_name
+      when: "'workers' in group_names"
+      failed_when: az_name.status != 200
+
+    - name: Save metadata as official facts
+      set_fact:
+        ec2_instance_id: "{{ instance_id.content }}"
+        ec2_az: "{{ az_name.content }}"
+      when: "'workers' in group_names"
+
+    - name: Patch node with providerID and Zone label
+      delegate_to: "{{ groups['master'][0] }}"
+      shell: >
+        kubectl patch node {{ ansible_hostname }}
+        -p '{"spec":{"providerID":"aws:///{{ hostvars[inventory_hostname]["ec2_az"] }}/{{ hostvars[inventory_hostname]["ec2_instance_id"] }}"}}'
+        && kubectl label node {{ ansible_hostname }}
+        topology.kubernetes.io/zone={{ hostvars[inventory_hostname]["ec2_az"] }}
+        --overwrite
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      when: "'workers' in group_names"
+      changed_when: false

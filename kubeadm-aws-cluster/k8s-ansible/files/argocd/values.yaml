@@ -1,0 +1,3 @@
+configs:
+  secret:
+    argocdServerSecretKey: "T/QlZtmWcp1E9Hjvsc26bd85dY8YpkLAt4a5+yFld8o="

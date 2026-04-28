@@ -1,24 +1,24 @@
 # 1. The Policy: What the nodes are ALLOWED to do
-resource "aws_iam_policy" "external_dns" {
-  name        = "AllowExternalDNSUpdates"
-  description = "Allows ExternalDNS to manage Route53 records"
+# resource "aws_iam_policy" "external_dns" {
+#   name        = "AllowExternalDNSUpdates"
+#   description = "Allows ExternalDNS to manage Route53 records"
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action   = ["route53:ChangeResourceRecordSets"]
-        Effect   = "Allow"
-        Resource = ["arn:aws:route53:::hostedzone/${aws_route53_zone.private.zone_id}"]
-      },
-      {
-        Action   = ["route53:ListHostedZones", "route53:ListResourceRecordSets"]
-        Effect   = "Allow"
-        Resource = ["*"]
-      }
-    ]
-  })
-}
+#   policy = jsonencode({
+#     Version = "2012-10-17"
+#     Statement = [
+#       {
+#         Action   = ["route53:ChangeResourceRecordSets"]
+#         Effect   = "Allow"
+#         Resource = ["arn:aws:route53:::hostedzone/${aws_route53_zone.private.zone_id}"]
+#       },
+#       {
+#         Action   = ["route53:ListHostedZones", "route53:ListResourceRecordSets"]
+#         Effect   = "Allow"
+#         Resource = ["*"]
+#       }
+#     ]
+#   })
+# }
 
 # 2. The Role: The "Job Description" for the EC2 instance
 resource "aws_iam_role" "k8s_node_role" {
@@ -39,10 +39,10 @@ resource "aws_iam_role" "k8s_node_role" {
 }
 
 # 3. Attach the Policy to the Role
-resource "aws_iam_role_policy_attachment" "external_dns_attach" {
-  role       = aws_iam_role.k8s_node_role.name
-  policy_arn = aws_iam_policy.external_dns.arn
-}
+# resource "aws_iam_role_policy_attachment" "external_dns_attach" {
+#   role       = aws_iam_role.k8s_node_role.name
+#   policy_arn = aws_iam_policy.external_dns.arn
+# }
 
 # 4. The Profile: The actual container we "clip" onto the EC2 instance
 resource "aws_iam_instance_profile" "k8s_node_profile" {

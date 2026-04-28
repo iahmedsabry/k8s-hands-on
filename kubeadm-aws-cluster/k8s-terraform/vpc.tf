@@ -3,10 +3,13 @@ data "http" "my_ip" {
 }
 
 resource "aws_vpc" "k8s_vpc" {
-  cidr_block = "10.0.0.0/16"
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_support   = true
+  enable_dns_hostnames = true
 
   tags = {
-    Name = "k8s-vpc"
+    Name                                = "k8s-vpc"
+    "kubernetes.io/cluster/k8s-cluster" = "shared"
   }
 }
 
@@ -17,7 +20,7 @@ resource "aws_subnet" "k8s_subnet" {
   availability_zone       = "us-east-1a"
 
   tags = {
-    Name = "k8s-subnet"
+    Name                                = "k8s-subnet"
     "kubernetes.io/cluster/k8s-cluster" = "shared"
     "kubernetes.io/role/elb"            = "1"
   }
@@ -30,7 +33,7 @@ resource "aws_subnet" "k8s_subnet_2" {
   availability_zone       = "us-east-1b" # MUST be different than 1a
 
   tags = {
-    Name = "k8s-subnet-2"
+    Name                                = "k8s-subnet-2"
     "kubernetes.io/cluster/k8s-cluster" = "shared"
     "kubernetes.io/role/elb"            = "1"
   }
@@ -61,70 +64,29 @@ resource "aws_route_table_association" "assoc_2" {
   route_table_id = aws_route_table.rt.id
 }
 
-resource "aws_security_group" "k8s_sg" {
-  name        = "k8s-sg"
-  description = "Kubernetes cluster security group"
-  vpc_id      = aws_vpc.k8s_vpc.id
+resource "aws_security_group" "k8s_nodes_sg" {
+  name   = "k8s-nodes-sg"
+  vpc_id = aws_vpc.k8s_vpc.id
 
   lifecycle {
     create_before_destroy = true
   }
 
+  # Allow everything inside the cluster
   ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "HTTP"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "HTTPS"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "Kubernetes NodePort range"
-    from_port   = 30000
-    to_port     = 32767
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "Kubernetes API Server (internal)"
-    from_port   = 6443
-    to_port     = 6443
-    protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/16"]
-  }
-
-  ingress {
-    description = "Allow all internal cluster communication"
+    description = "Allow all between nodes"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = ["10.0.0.0/16"]
+    self        = true
   }
 
+  # SSH from your IP
   ingress {
-    description = "Kubernetes API Server (Public Access)"
-    from_port   = 6443
-    to_port     = 6443
+    from_port   = 22
+    to_port     = 22
     protocol    = "tcp"
-    # Change this from 10.0.0.0/16 to allow your laptop
-    cidr_blocks = ["${chomp(data.http.my_ip.response_body)}/32"] # Or put your specific Public IP here for better security
+    cidr_blocks = ["${chomp(data.http.my_ip.response_body)}/32"]
   }
 
   egress {
@@ -135,21 +97,51 @@ resource "aws_security_group" "k8s_sg" {
   }
 
   tags = {
-    Name = "k8s-sg"
+    Name                                = "k8s-nodes-sg"
+    "kubernetes.io/cluster/k8s-cluster" = "shared"
   }
 }
 
-resource "aws_route53_zone" "private" {
-  name = "insightlab.internal"
+resource "aws_security_group_rule" "alb_to_nodes" {
+  type                     = "ingress"
+  description              = "Allow ALB to reach NodePorts"
+  from_port                = 30000
+  to_port                  = 32767
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.k8s_nodes_sg.id
+  source_security_group_id = aws_security_group.alb_sg.id
+}
 
-  vpc {
-    vpc_id = aws_vpc.k8s_vpc.id
+
+resource "aws_security_group" "alb_sg" {
+  name   = "k8s-alb-sg"
+  vpc_id = aws_vpc.k8s_vpc.id
+
+  # Internet → ALB
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # ALB → targets
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
   tags = {
-    Name = "k8s-private-zone"
-    Environment = "dev"
-    Project     = "k8s-hands-on"
+    Name                                = "alb-sg"
+    "kubernetes.io/cluster/k8s-cluster" = "shared"
+
   }
 }
-

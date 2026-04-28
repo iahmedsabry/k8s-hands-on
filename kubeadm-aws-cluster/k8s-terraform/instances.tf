@@ -9,16 +9,16 @@ data "aws_ami" "ubuntu" {
   }
 }
 
-resource "aws_instance" "control_plane" {
+resource "aws_instance" "master" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.k8s_subnet.id
-  vpc_security_group_ids = [aws_security_group.k8s_sg.id]
+  vpc_security_group_ids = [aws_security_group.k8s_nodes_sg.id]
   key_name               = aws_key_pair.k8s_key.key_name
   iam_instance_profile   = aws_iam_instance_profile.k8s_node_profile.name
 
   tags = {
-    Name = "k8s-control-plane"
+    Name = "k8s-master"
     "kubernetes.io/cluster/k8s-cluster" = "shared"
   }
 }
@@ -28,7 +28,7 @@ resource "aws_instance" "workers" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.k8s_subnet.id
-  vpc_security_group_ids = [aws_security_group.k8s_sg.id]
+  vpc_security_group_ids = [aws_security_group.k8s_nodes_sg.id]
   key_name               = aws_key_pair.k8s_key.key_name
   iam_instance_profile   = aws_iam_instance_profile.k8s_node_profile.name
 
